@@ -1,0 +1,3501 @@
+CREATE OR REPLACE Procedure eod_step_0001
+   as
+Begin 
+    ITSHBHO.HIST_DATE_BACKUP(); 
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0010
+   as
+ vBus_date   date; 
+begin   
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+   for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+   loop   
+       ITSHBHO.BACKUP_STOCK(to_char(i.dt, 'DD/MM/YYYY'));   
+       
+       insert into TP860MB_BACKUP(BR_CD,POS_CD,TLR_ID,CCY_CD,DENOM,TOT_NUM,MKR_ID,MKR_DT,AUTH_ID,AUTH_DT,EOD_LT_NO,EOD_DATE)
+       select TB.BR_CD, TB.POS_CD, TB.TLR_ID, TB.CCY_CD, TB.DENOM, TB.TOT_NUM, TB.MKR_ID, TB.MKR_DT, TB.AUTH_ID, TB.AUTH_DT, TB.EOD_LT_NO,i.dt from intellect.tp860mb tb
+       minus
+       Select TB.BR_CD, TB.POS_CD, TB.TLR_ID, TB.CCY_CD, TB.DENOM, TB.TOT_NUM, TB.MKR_ID, TB.MKR_DT, TB.AUTH_ID, TB.AUTH_DT, TB.EOD_LT_NO, TB.EOD_DATE From itshbho.TP860MB_BACKUP TB
+       where eod_date=i.dt;       
+       commit;    
+   end loop;                     
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_0011
+   as
+ vBus_date   date;
+BEGIN 
+  Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+  ITSHBHO.MAKE_CUST_EBANK_CARD(to_char(vBus_date, 'DD/MM/YYYY'));
+  COMMIT; 
+END; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0012
+   as
+ vBus_date   date; 
+ BEGIN  
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+   ITSHBHO.csl_map_pro(to_char(vBus_date, 'DD/MM/YYYY')); 
+   COMMIT;  
+ END; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0013
+   as
+BEGIN backup_CL003MB_daily;END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0014
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_AA010MB_HIST(to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0016
+   as
+ vBus_date   date;  
+  BEGIN   
+    execute immediate 'truncate table fx_rate_tmp';  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';  
+         
+      insert into fx_rate_tmp(CCY_CD,RATE)  
+       select ccy_cd,GETEXRATEBYCCYCD(ccy_cd,'704',to_char(vBus_date,'DD/MM/YYYY'))  
+       from intellect.ca800mb;    
+         
+     delete from TBL_CTR_CIF where eod_date=vBus_date ;  
+      insert into TBL_CTR_CIF(EOD_DATE, CIF_NO, DR_CR,LCY_AMT, ROW_IDS)  
+      select eod_date,cif_no,dr_cr_flg,sum(AMOUNT*b.RATE) 
+      , XMLCAST( XMLAGG (XMLELEMENT (e, row_id || ',') ORDER BY row_id).EXTRACT ( '//text()') as CLOB) 
+      from ctr a,fx_rate_tmp b  
+      where eod_date=vBus_date and a.ccy_cd=b.ccy_cd  
+      group by eod_date,cif_no,dr_cr_flg ;  
+    COMMIT;   
+  END; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0019
+   as
+ vBus_date   date;
+begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)       
+    loop
+        ITSHBHO.SHB_MMBACKUP (to_char(i.dt, 'DD/MM/YYYY'));    
+        commit;        
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_002
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.GLDAILYMAKER (to_char(i.dt,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0021
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.GLDAILYMAKER_NO_EAS (to_char(i.dt,'DD/MM/YYYY'),'Y');
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_003
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.GLHNDAILYMAKER (to_char(i.dt,'DD/MM/YYYY'));
+       ITSHBHO.GL000 (to_char(i.dt,'DD/MM/YYYY'),to_char(i.dt,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_004
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.GLLAOHN (to_char(vBus_date,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_005
+   as
+ vBus_date   date;
+begin
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Delete SHB_TB_FISALLOC_HIST where  EOD_DATE=vBus_date;
+        INSERT INTO ITSHBHO.SHB_TB_FISALLOC_HIST(ALLOC_SEQ, DEAL_FLOW, DEAL_ID, UNSOURCED_QTY, SECURITY_CODE, EOD_DATE)            
+        SELECT A.ALLOC_SEQ,A.DEAL_FLOW,A.DEAL_ID,A.UNSOURCED_QTY,B.SECURITY_CODE,vBus_date
+        FROM   INTELLECT.TB_FIS_DEAL_ALLOC A
+        INNER  JOIN INTELLECT.VW_FISDEAL B ON A.DEAL_ID = B.DEAL_ID
+        WHERE  TRIM(B.DEAL_STATUS) = N'DEAL_COMPLETED'
+             OR TRIM(B.DEAL_STATUS) = N'BO_AUTHORIZED'
+        ORDER  BY ALLOC_SEQ;    
+        commit;            
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_0051
+   as
+ vBus_date date; 
+BEGIN        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop
+        SP_BACKUPUL001MB(to_char(i.dt, 'DD/MM/YYYY'));
+        TL020_INPUT(to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY'),null,'A',null); 
+        COMMIT; 
+    end loop;
+END; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_006
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CS005_HIST (to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0060
+   as
+ vBus_date   date;
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    if to_char(vBus_date, 'DD/MM/YYYY') like '31/12/%' then
+        ITSHBHO.MAKE_TH019(to_char(vBus_date, 'DD/MM/YYYY'));
+    end if;
+end; 
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_0061
+   as
+ vBus_date   date;
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.TRANSHIST_MAKER (to_char(vBus_date,'DD/MM/YYYY'),to_char(vBus_date,'DD/MM/YYYY'));
+    commit;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0063
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   start_time   DATE;
+   end_time     DATE;
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   FOR i IN (  SELECT dt
+                 FROM CLDRview
+                WHERE dt BETWEEN vBus_date
+                             AND (SELECT BSNS_DT - 1
+                                    FROM intellect.ca850mb
+                                   WHERE BR_CD = 'BR0001')
+             ORDER BY dt)
+   LOOP
+      ITSHBHO.LOAN_HIST_MAKER (TO_CHAR (i.dt, 'DD/MM/YYYY'));
+      COMMIT;
+   END LOOP;
+
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_007
+   as
+Begin
+    SHB_PR_IB_CARD_CUSTOMER();
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_008
+   as
+ vBus_date   date;   
+begin   
+   Select LAST_WRK_DT into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+   ITSHBHO.SHB_LSBQ_DAILY_BACKDATE (to_char(vBus_date, 'DD/MM/YYYY'));   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_009
+   as
+ vBus_date   date; 
+ Begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+     shb_lsbq_daily_lst(to_char(vBus_date, 'DD/MM/YYYY')); 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_010
+   as
+ vBus_date   date;            
+begin                
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';                     
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)
+    loop                    
+        ITSHBHO.MAKE_LN017_HIST (to_char(i.dt, 'DD/MM/YYYY'));              
+        COMMIT;           
+    end loop;                              
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0111
+   as
+ vLAST_WRK_DT   date;
+vBSNS_DT  date;
+vLastday_Bus_DT  date;
+begin
+        Select LAST_WRK_DT,BSNS_DT into vLAST_WRK_DT,vBSNS_DT from intellect.ca850mb where BR_CD='BR0001';    
+
+        select max(dt) into vLastday_Bus_DT
+        from
+        (select vBSNS_DT-1+ rownum dt from all_objects where rownum<=32)
+        where dt<=last_day(vBSNS_DT) and dt not in (select HOLI_DT from INTELLECT.CA820MB where HOLI_DT>= vBSNS_DT);
+
+        if vBSNS_DT=vLastday_Bus_DT then
+            sp_duphongthang(to_char(vLAST_WRK_DT,'DD/MM/YYYY'));
+        end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_012
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.TIDE_STATEMENT_INPUT (to_char(i.dt,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_014
+   as
+ vBus_date   date;    
+begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop    
+        ITSHBHO.MAKE_LN014_HIST (to_char(i.dt, 'DD/MM/YYYY'));    
+        COMMIT; 
+    end loop;                      
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_017
+   as
+Begin  
+    insert into M_TRADE_DTLS    
+    select c.PC_EOD_DT EOD_DT, a.REF_NO, a.SEQ_NO, a.LETTR_GUAR_NO, a.BRN_CODE,  a.PROD_CODE, a.OPN_CODE, a.PRIMARY_PARTY_NUMBER, a.PRIMARY_PARTY_NAME, a.GUAR_CCY, 
+        a.GUAR_AMOUNT, 
+        a.ISSUE_DATE, a.EXPIRY_DATE, a.CLOSE_DATE, a.CANCEL_DATE,  a.CONTRACT_END_DATE, a.STATE, a.AMEND_TYPE, a.REG_DATE, a.AUTH_DATE, a.PROCESSING_DATE,  a.GUAR_AVAIL_AMOUNT,
+        b.OPN_CODE LAST_OPN_CODE, 
+        b.GUAR_AMOUNT LAST_GUAR_AMOUNT, 
+        b.ISSUE_DATE LAST_ISSUE_DATE, b.EXPIRY_DATE LAST_EXPIRY_DATE, b.CLOSE_DATE LAST_CLOSE_DATE, b.AMEND_TYPE LAST_AMEND_TYPE, b.AMEND_EFF_DATE, 
+        b.CHANGE_IN_AMOUNT,  
+        b.CHANGE_GUAR_AMOUNT, b.PROCESSING_DATE LAST_PROCESSING_DATE, b.CHANGE_IN_AMOUNT_CCY, d.STATUS LAST_STATE
+    from intellect.OT_GR_TXN_DETAILS a, intellect.OT_GR_DETAILS_LATEST b, intellect.P_CTRL c,
+    (select ref_no, STATUS from intellect.ot_gr_sub_fldr_attr) d
+    where   a.REF_NO = b.REF_NO and a.REF_NO = d.REF_NO and nvl(d.STATUS, 'XX') <> 'CLOSED' ;
+    
+    commit;
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_018
+   as
+ vBus_date   date;
+vNext_date  date;
+begin
+    Select LAST_WRK_DT into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';     
+    if to_char(trunc(vNext_date,'MON'), 'DD') = '01' then
+      itshbho.MAKE_COMPULSORY('01/' || to_char(vBus_date, 'MM/YYYY'),to_char(vNext_date-1, 'DD/MM/YYYY'));
+    end if;
+    commit;            
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_019
+   as
+ vLAST_WRK_DT date;
+    vBus_date date;
+begin
+    Select LAST_WRK_DT, BSNS_DT into vLAST_WRK_DT, vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+    for i in (select dt from itshbho.CLDRview where dt between vLAST_WRK_DT and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop
+        insert into CREATEVATNOE_LOG (EOD_DATE, MSG, RESULT, RESULT_MSG)  
+        values (i.dt, 'Start GET_VATNO_EOD (i.dt, to_char(i.dt,''dd/mm/yyyy''))', '1', 'OK');
+        commit;
+        GET_VATNO_EOD (to_char(i.dt,'dd/mm/yyyy'));
+        insert into CREATEVATNOE_LOG (EOD_DATE, MSG, RESULT, RESULT_MSG)  
+        values (i.dt, 'End GET_VATNO_EOD (i.dt, to_char(i.dt,''dd/mm/yyyy''))', '1', 'OK');
+        commit; 
+        insert into CREATEVATNOE_LOG (EOD_DATE, MSG, RESULT, RESULT_MSG)  
+        values (i.dt, 'Start GET_VATNO_EOD (i.dt, to_char(i.dt,''dd/mm/yyyy'',null,''Y'',''Y''))', '1', 'OK');
+        commit;
+        GET_VATNO_EOD (to_char(i.dt,'dd/mm/yyyy'), null, 'Y', 'Y');
+        commit;    
+        insert into CREATEVATNOE_LOG (EOD_DATE, MSG, RESULT, RESULT_MSG)  
+        values (i.dt, 'End GET_VATNO_EOD (i.dt, to_char(i.dt,''dd/mm/yyyy'',null,''Y'',''Y''))', '1', 'OK');
+        commit;
+    end loop;
+    commit;            
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_020
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date,'dd/mm/yyyy');
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    THDCV01A_INPUTDATA_ALL(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_021
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20); 
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    THDCV02_INPUTDATA(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end;   
+$$
+
+CREATE OR REPLACE Procedure eod_step_023
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    THDCV04_INPUTDATA(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end;   
+$$
+
+CREATE OR REPLACE Procedure eod_step_024
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    
+    delete dcv_full where 1=1 and EOD_DATE between to_date(pRptDate,'DD/MM/YYYY')   and to_date(pRptDateTo,'DD/MM/YYYY') and CODE like 'THDCV10%'; 
+    THDCV10ALL_INPUTDATA(pRptDate, pRptDateTo, 'A', '110000'); 
+    commit;            
+end;   
+$$
+
+CREATE OR REPLACE Procedure eod_step_025
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20); 
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    
+    THDCV11ALL_INPUTDATA(pRptDate, pRptDateTo, 'A', '110000'); 
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_028
+   as
+ vp_from_date VARCHAR2(20); 
+vp_to_date VARCHAR2(20); 
+begin 
+Select to_char(MAX(LAST_WRK_DT), 'DD/MM/RRRR') into vp_from_date 
+from intellect.ca850mb where BR_CD='BR0001'; 
+Select to_char(MAX(BSNS_DT)-1, 'DD/MM/RRRR') into vp_to_date 
+from intellect.ca850mb where BR_CD='BR0001';
+ITSHBHO.THDCV05_INPUT (vp_from_date, vp_to_date, 'A', '______'); 
+COMMIT; 
+end; 
+ 
+$$
+
+CREATE OR REPLACE Procedure eod_step_029
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    prg_cdkt_all_pos(to_char(vBus_date,'DD MON YYYY'));
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_031
+   as
+ vBus_date   date;       
+begin       
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)       
+    loop       
+    ITSHBHO.MAKE_LN036_HIST(to_char(i.dt, 'DD/MM/YYYY'));       
+    COMMIT; 
+    end loop;                         
+end;
+
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_032
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_TR022_HIST (to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_034
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.GET_GL_GUARANTEE(to_char(vBus_date,'DD/MM/YYYY'));
+    commit;            
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_035
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.MAKE_M_REPMT_SCHD_STMT (to_char(i.dt, 'DD/MM/YYYY'));   
+       commit;    
+    end loop;
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_036
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.MAKE_M_REINTRATE_SCHD(to_char(vBus_date,'DD/MM/YYYY'));
+    commit;            
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_037
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.MAKE_TL043_HIST(to_char(vBus_date,'DD/MM/YYYY'));
+    commit;            
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_038
+   as
+ vLAST_WRK_DT date;
+    vBus_date date;
+begin
+    Select LAST_WRK_DT, BSNS_DT into vLAST_WRK_DT, vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+    for i in (select dt from itshbho.CLDRview where dt between vLAST_WRK_DT and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop
+        MAKE_TL004DEC_DTLS (to_char(i.dt,'dd/mm/yyyy'));
+        commit;             
+    end loop;
+    commit;            
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_039
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_FX_HIST (to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_040
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.MAKE_TH022_STMT(to_char(vBus_date,'DD/MM/YYYY'));
+    commit;            
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_041
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';     
+    ITSHBHO.MAKE_GAP_PRIN_REPORT (to_char(vBus_date, 'DD/MM/YYYY'));
+    commit;       
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_042
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';     
+    ITSHBHO.MAKE_GAP_REIRATE_REPORT (to_char(vBus_date, 'DD/MM/YYYY'));
+    commit;       
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_043
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_TR040 (to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_044
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';     
+    ITSHBHO.MAKE_TR041 (to_char(vBus_date, 'DD/MM/YYYY'));
+    commit;       
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_048
+   as
+ rptdate varchar2(20);
+vBus_date   date;
+vNext_date  date;
+pDataDate varchar2(20);
+pRptDate    varchar2(20);
+begin
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';    
+        pDataDate := to_char(vBus_date,'DD/MM/YYYY');
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');
+        if (to_char(vBus_date,'MON') <> to_char(vNext_date,'MON')) and (to_number(to_char(vNext_date,'DD'))<> 1 ) then
+            pRptDate := trunc(vNext_date,'MONTH');
+            ITSHBHO.TR008_MAKE_ALL ('TH030',to_char(trunc(vNext_date,'MONTH'),'DD/MM/YYYY'),'N','N' );
+        end if;    
+        ITSHBHO.TR008_MAKE_ALL ('TH030',pRptDate,'N','N' );
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_049
+   as
+ rptdate varchar2(20);
+vBus_date   date;
+vNext_date  date;
+pDataDate varchar2(20);
+pRptDate    varchar2(20);
+pReport varchar2(30);
+begin
+        pReport := 'TR008';
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';    
+        pDataDate := to_char(vBus_date,'DD/MM/YYYY');
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');     
+        if (to_char(vBus_date,'MON') <> to_char(vNext_date,'MON')) and (to_number(to_char(vNext_date,'DD'))<> 1 ) then
+            pRptDate := trunc(vNext_date,'MONTH');
+            ITSHBHO.TR008_MAKE_ALL ('TR008',to_char(trunc(vNext_date,'MONTH'),'DD/MM/YYYY'),'N','N' );
+        end if;
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');
+        ITSHBHO.TR008_MAKE_ALL ('TR008',pRptDate,'N','N' );
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_050
+   as
+ rptdate varchar2(20);
+vBus_date   date;
+vNext_date  date;
+pDataDate varchar2(20);
+pRptDate    varchar2(20);
+pReport varchar2(30);
+begin
+        pReport := 'TR008';
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';    
+        pDataDate := to_char(vBus_date,'DD/MM/YYYY');
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');  
+        if (to_char(vBus_date,'MON') <> to_char(vNext_date,'MON')) and (to_number(to_char(vNext_date,'DD'))<> 1 ) then
+            pRptDate := trunc(vNext_date,'MONTH');
+            ITSHBHO.TR008_MAKE_ALLP ('TR008',to_char(trunc(vNext_date,'MONTH'),'DD/MM/YYYY'),'N','N' );
+        end if;
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');
+        ITSHBHO.TR008_MAKE_ALLP ('TR008',pRptDate,'N','N' );
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_051
+   as
+ rptdate varchar2(20); 
+ vBus_date   date; 
+ vNext_date  date; 
+ pDataDate varchar2(20); 
+ pRptDate    varchar2(20); 
+ pReport varchar2(30); 
+ begin 
+         pReport := 'TH030'; 
+         Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+         Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';     
+         pDataDate := to_char(vBus_date,'DD/MM/YYYY'); 
+         pRptDate := to_char(vNext_date,'DD/MM/YYYY');      
+         if (to_char(vBus_date,'MON') <> to_char(vNext_date,'MON')) and (to_number(to_char(vNext_date,'DD'))<> 1 ) then 
+             pRptDate := trunc(vNext_date,'MONTH'); 
+             ITSHBHO.TR008_MAKE_ALLP (pReport,to_char(trunc(vNext_date,'MONTH'),'DD/MM/YYYY'),'N','N' ); 
+         end if; 
+         pRptDate := to_char(vNext_date,'DD/MM/YYYY'); 
+         ITSHBHO.TR008_MAKE_ALLP (pReport,pRptDate,'N','N' ); 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_052
+   as
+ vBus_date   date;
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.MAKE_GL033_DATAP ( 'GL033', to_char(vBus_date,'dd/mm/yyyy'), 'N' );
+    commit;
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_053
+   as
+ vBus_date   date; 
+ begin         
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+     ITSHBHO.MAKE_GL030_DATAP ( 'GL030HN', to_char(vBus_date,'dd/mm/yyyy'), 'N','Y' ); 
+     commit; 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_054
+   as
+ vBus_date   date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.MAKE_LN039_HIST (to_char(i.dt, 'DD/MM/YYYY')); 
+        commit;  
+    end loop;                   
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_055
+   as
+ vBus_date   date;   
+begin   
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+        ITSHBHO.MAKE_LN044_HIST (to_char(i.dt, 'DD/MM/YYYY'));   
+        commit;    
+    end loop;                     
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_056
+   as
+ vBus_date   date;
+vNext_date  date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';  
+    if  to_char(vBus_date, 'MM')<> to_char(vNext_date, 'MM')   then 
+        INTELLECT_THONGKE_INPUT(vBus_date); 
+        COMMIT;
+    end if;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_057
+   as
+ vBus_date   date;    
+begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop
+        ITSHBHO.MAKE_TF004_HIST (to_char(i.dt, 'DD/MM/YYYY'));    
+        COMMIT; 
+    end loop;                      
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_058
+   as
+ vBus_date   date;
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.THDCV12_INPUTDATA (to_char(vBus_date,'DD/MM/YYYY'));
+    commit;
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_059
+   as
+ vBus_date   date;       
+begin       
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)       
+    loop       
+    ITSHBHO.KS011_BACKUP(to_char(i.dt, 'DD/MM/YYYY'));       
+    COMMIT; 
+    end loop;                         
+end;
+ 
+$$
+
+CREATE OR REPLACE Procedure eod_step_061
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.MAKE_LN019B_HIST (to_char(vBus_date,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_062
+   as
+ vBus_date date;
+begin 
+ Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+insert into cls_quahan_back(LINE_NO, 
+                                         CLS_NO, REVOLVING,
+                                          START_DT, MATURITY_DT,
+                                           LMT_AMT, LCY_LMT_AMT,
+                                            AC_NO, LEGACY_AC, 
+                                            DESCR, CCY_CD, 
+                                            AC_LMT_REST, VAL_DT,
+                                             NET_BAL, CR_BAL_INT_DET,
+                                              DR_BAL_INT_DET, EOD_DATE,
+                                              pos_cd,PROD_CD,
+                                              SUB_PROD_CD  ,
+                                              STATUS                                  
+                                           )
+select  cl004.line_no,
+             cl003.cls_no,
+             cl003.revolving,
+             cl003.START_DT,
+             cl003.MATURITY_DT,
+             cl003.LMT_AMT,
+             cl003.LCY_LMT_AMT,
+             cl004.ac_no,
+             cl004.legacy_ac,
+             CL004.DESCR,
+             cl004.ccy_cd,
+             cl004.ac_lmt_rest,
+             aa010.val_dt,
+             net_bal,
+             CR_BAL_INT_DET,
+             DR_BAL_INT_DET,
+             vBus_date  EOD_date,
+               cl003.pos_cd,
+               cl003.PROD_CD,
+             cl003.SUB_PROD_CD ,
+             cl004.status 
+ from    intellect.cl004mb cl004,
+            intellect.aa010mb  aa010,
+             intellect.cl003mb cl003 
+  where    cl004.ac_no=aa010.ac_no  
+            and   cl004.line_no=cl003.line_no 
+            and  aa010.val_dt = ( select max(val_dt) from intellect.aa010mb b where b.ac_no=cl004.ac_no and val_dt<=vBus_date ) ;
+            
+                ITSHBHo.CLS_QUAHAN_QUET;
+            
+         commit;   
+         
+  
+
+         
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_063
+   as
+ vBus_date   date;
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    ITSHBHO.MAKE_TOI_FOREX (to_char(vBus_date,'DD/MM/YYYY'));
+    commit;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_064
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+     for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+     loop    
+        ITSHBHO.SP_VAYCAMCO_SENT_MAIL (to_char(i.dt,'DD/MM/YYYY')); 
+        commit;     
+     end loop; 
+ end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_066
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+     for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+     loop    
+        ITSHBHO.MAKE_LN019A_HIST (to_char(i.dt,'DD/MM/YYYY')); 
+         commit;     
+    end loop; 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_067
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    ITSHBHO.MAKE_TH037B_DCV(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0692
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    vBDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+        vRptDate := vRptDate-1;
+        vBDate := trunc(vRptDate,'MONTH'); 
+        ITSHBHO.AC_BAL_AVERAGE_M(to_char(vBDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'));
+        commit;
+        ITSHBHO.ac_bal_average_m_sc(to_char(vBDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'));
+        commit;
+        ITSHBHO.AC_BAL_AVERAGE_M_VIP(to_char(vBDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'));
+        commit;
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_070
+   as
+ vBus_date   date;  
+      vBef_date date;  
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';  
+       Select LAST_WORK_DATE into vBef_date from ITSHBHO.TB_HIST_DATES where TODAY_DATE = vBus_date and NAT = 'VNM';  
+       ITSHBHO.MAKE_TH048_TT (to_char(vBef_date, 'DD/MM/YYYY'), to_char(vBus_date, 'DD/MM/YYYY'), 'D');   
+       commit;    
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_071
+   as
+ 
+    vBus_date   date;   
+    vPrev_date   date;
+begin   
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where br_cd = 'BR0001'; 
+       
+   select max(today_date)+1 into vPrev_date
+   from itshbho.tb_hist_dates a
+   where today_date < vBus_date
+    and nat ='VNM' ;
+   ITSHBHO.MAKE_TH050_DAILY (to_char(vPrev_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'));   
+   commit;    
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_072
+   as
+
+    
+    vBus_date   date;   
+    vPrev_date   date;
+begin   
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where br_cd = 'BR0001';        
+   ITSHBHO.GLSHBFCHN (to_char(vBus_date, 'DD/MM/YYYY'));   
+   commit;    
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_075
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         MAKE_TR047 (to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_076
+   as
+ 
+    vBus_date   date;
+    vNext_date  date;
+    vLast_date date;
+    begin  
+            Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+            Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';    
+            vLast_date:= last_day(vBus_date);
+     IF vBus_date = vLast_date and to_char(vLast_date,'MM') in ('03','06','09','12') then
+         begin
+         TH011(to_char(vBus_date,'dd/mm/yyyy'),'M');
+         TH011(to_char(vBus_date,'dd/mm/yyyy'),'Q');
+         end;
+         
+        ELSIF  vBus_date = vLast_date and to_char(vLast_date,'MM') not in ('03','06','09','12') then 
+         begin
+         TH011(to_char(vBus_date,'dd/mm/yyyy'),'M');
+         end;
+         
+        ELSIF vBus_date < vLast_date and vNext_date > vLast_date and  to_char(vNext_date,'DD')='01' and to_char(vLast_date,'MM') in ('03','06','09','12') then 
+     
+          begin
+             TH011(to_char(vLast_date,'dd/mm/yyyy'),'M');
+             TH011(to_char(vLast_date,'dd/mm/yyyy'),'Q');
+             end;
+        ELSIF vBus_date < vLast_date and vNext_date > vLast_date and  to_char(vNext_date,'DD')='01' and to_char(vLast_date,'MM') not in ('03','06','09','12') then    
+      
+          begin
+             TH011(to_char(vLast_date,'dd/mm/yyyy'),'M');
+             end;
+     END IF;
+    end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_077
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+         MAKE_DUNO_BIENDONG(to_char(vBus_date, 'DD/MM/YYYY')); 
+         commit;                 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_078
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+        ITSHBHO.TR026_BACKUP ( to_char(vBus_date) )  ; 
+        COMMIT;        
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_079
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+       for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+       loop   
+           ITSHBHO.MAKE_TH052 ('TH052',to_char(i.dt, 'DD/MM/YYYY'),'N');   
+           commit;    
+       end loop;                     
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_080
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_TH032 (to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_081
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_TF009_DTLS (to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY'),'A','110000'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_082
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+      for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+      loop  
+          ITSHBHO.MAKE_TL009_DTLS (to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY'),'A','110000');  
+          commit; 
+      end loop;                    
+  end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_084
+   as
+ vBus_date   date;    
+    begin    
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+        for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+        loop    
+            ITSHBHO.MAKE_TR044A (to_char(i.dt, 'DD/MM/YYYY'),'Y');    
+    COMMIT; 
+        end loop;                      
+    end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_085
+   as
+ vBus_date   date;      
+      begin      
+          Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';           
+          for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)      
+          loop      
+              ITSHBHO.MAKE_TR045A (to_char(i.dt, 'DD/MM/YYYY'));      
+ commit; 
+           end loop;                        
+      end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_086
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_KS_MM01_DTLS (to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY'),null,'A','110000'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_087
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    
+         ITSHBHO.MAKE_EBDVKH003_HIST (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'A','110000'); 
+         commit;  
+                  
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_0871
+   as
+ vBus_date   date;
+ begin
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb@shbcore where BR_CD='BR0001';
+
+         ITSHBHO.MAKE_DETAIL_HIST (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');
+         commit;
+
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_089
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date,'dd/mm/yyyy');
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    THDCV18_INPUTDATA_ALL(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_0891
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20); 
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    THDCV_FINPOST(pRptDate, pRptDateTo, 'A',NULL);
+    commit;            
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_090
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_TF030_DTLS (to_char(i.dt, 'DD/MM/YYYY'),to_char(i.dt, 'DD/MM/YYYY'),'A','110000'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_091
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+      for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+      loop  
+          ITSHBHO.THDCV18_FINPOST(to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));  
+          commit;   
+      end loop;                    
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_093
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+        
+           itshbho.make_tr033_test2_hist (null,to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'A','110000'); 
+ COMMIT; 
+                      
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_094
+   as
+ vBus_date   date;      
+      begin      
+          Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';           
+          for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)      
+          loop      
+              ITSHBHO.MAKE_TR044C (to_char(i.dt, 'DD/MM/YYYY'),'Y');      
+        COMMIT; 
+          end loop;                        
+      end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_096
+   as
+ rptdate varchar2(20);
+vBus_date   date;
+vNext_date  date;
+pDataDate varchar2(20);
+pRptDate    varchar2(20);
+begin
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';    
+        pDataDate := to_char(vBus_date,'DD/MM/YYYY');
+        pRptDate := to_char(vNext_date,'DD/MM/YYYY');
+        if (to_char(vBus_date,'MON') <> to_char(vNext_date,'MON')) and (to_number(to_char(vNext_date,'DD'))<> 1 ) then
+            pRptDate := trunc(vNext_date,'MONTH');
+            ITSHBHO.TH030HN_MAKE_ALL ('TH030HN',to_char(trunc(vNext_date,'MONTH'),'DD/MM/YYYY'),'N','N' );
+        end if;    
+        ITSHBHO.TH030HN_MAKE_ALL ('TH030HN',pRptDate,'N','N' );
+end;    
+$$
+
+CREATE OR REPLACE Procedure eod_step_097
+   as
+ vBus_date   date;    
+begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop    
+        ITSHBHO.MAKE_LN051_HIST (to_char(i.dt, 'DD/MM/YYYY'),'A','______');    
+        COMMIT; 
+    end loop;                      
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_098
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20);  
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date,'dd/mm/yyyy');
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    MAKE_TH017B_DTLS(pRptDate, pRptDateTo, 'A', '110000');
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_099
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K1011'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_100
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K1021'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1000
+   as
+ vBus_date date;
+	outcursor sys_refcursor;
+ BEGIN
+    Select BSNS_DT-1 INTO vBus_date from intellect.ca850mb where BR_CD='BR0001';
+	ODP.EKYC_DAILY(to_char(vBus_date, 'DD/MM/YYYY'), outcursor); 
+	COMMIT;  
+ END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1001
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF018_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1002
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF019_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1003
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF032_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1004
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF025_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1005
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF031_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'A','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1006
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF023_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1007
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF020_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1008
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+          ITSHBHO.MAKE_TF035_EOD (to_char(vBus_date, 'DD/MM/YYYY'),to_char(vBus_date, 'DD/MM/YYYY'),'G','______');  
+          commit;       
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1009
+   as
+
+  vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT)
+    into vBus_date
+    from intellect.ca850mb
+   where BR_CD = 'BR0001';
+    for c in (select to_char(h.today_date, 'dd/mm/yyyy') ngay 
+                from itshbho.tb_hist_dates h 
+               where h.nat = 'VNM' 
+                 and h.today_date between 
+                     add_months(vBus_date, -2) and vBus_date
+                order by today_date)  
+    loop 
+          itshbho.MAKE_TF018A_HIST(p_from_date => c.ngay,p_to_date => c.ngay,
+          pos_flg        => 'G',  
+          p_pos_cd       => '______'  
+                    );  commit;
+          itshbho.make_tf056_hist(pp_from_date => c.ngay,pp_to_date => c.ngay,pp_pos_flg => 'G',pp_pos_cd => '______');                 
+    commit;  
+    end loop;  
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_101
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K1131'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1010
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';   
+       ITSHBHO.MAKE_CU073(to_char(vBus_date,'dd/mm/yyyy'));
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_1011
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';   
+       ITSHBHO.make_cu010a(to_char(vBus_date,'dd/mm/yyyy'));
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_1012
+   as
+ vBus_date   date; 
+      begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    MAKE_OL001_HIST(to_char(vBus_date,'dd/mm/yyyy'));
+    commit;            
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_102
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K3111'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_103
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K31'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_104
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K3213'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_105
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K3333'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_106
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.MAKE_CIC_DATA (to_char(i.dt, 'DD/MM/YYYY'),'CIC_K4011'); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_107
+   as
+ vBus_date   date;     
+ begin     
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)     
+     loop     
+         ITSHBHO.THDCV_DB (to_char(i.dt, 'DD/MM/YYYY'));  
+         COMMIT;  
+     end loop;                       
+ end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_110
+   as
+ vBus_date   date;       
+begin       
+Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)       
+    loop       
+    ITSHBHO.MAKE_KT001 (to_char(i.dt, 'DD/MM/YYYY'));       
+    COMMIT; 
+    end loop;                         
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_1102
+   as
+ vBus_date date;      
+      begin      
+          Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';           
+          ITSHBHO.MAKE_KT003_HIST(to_char(vBus_date, 'DD/MM/YYYY'));      
+      end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_111
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+       for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+       loop   
+           ITSHBHO.MAKE_TR048 (null, to_char(i.dt, 'DD/MM/YYYY'));   
+           commit;    
+       end loop;                     
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_112
+   as
+begin   
+    itshbho.update_thdcv20_ac ();                         
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_113
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    vBDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+        vRptDate := vRptDate-1;
+        vBDate := trunc(vRptDate,'MONTH');
+        ITSHBHO.MAKE_LN072 (null, to_char(vRptDate, 'DD/MM/YYYY'),'A','______');  
+        commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_115
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)
+    loop
+        if i.dt = last_day(i.dt) then
+            ITSHBHO.MAKE_TD043 (null,to_char(i.dt, 'DD/MM/YYYY'),'A','______');
+        end if;
+        commit;
+    end loop;
+end;
+    
+$$
+
+CREATE OR REPLACE Procedure eod_step_117
+   as
+ vBus_date   date;
+    begin
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        ITSHBHO.MAKE_LATECHG_INFO(to_char(vBus_date,'DD/MM/YYYY'));
+        commit;
+    end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_118
+   as
+ vBus_date   date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.MAKE_TH066 (to_char(i.dt, 'DD/MM/YYYY'),'G','______'); 
+        commit;  
+    end loop;                   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_119
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+     ITSHBHO.MAKE_CIC_K2011 (to_char(vBus_date, 'DD/MM/YYYY'),'A','______'); 
+     commit;                
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_120
+   as
+ vBus_date   date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.MAKE_CS021 (to_char(i.dt, 'DD/MM/YYYY'),'A','______'); 
+        commit;  
+    end loop;                   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_121
+   as
+ vBus_date   date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.MAKE_TF028A_DTLS (to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'),'A','______'); 
+        commit;  
+    end loop;                   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_122
+   as
+ vBus_date   date; 
+    v_fdate date;
+    v_tdate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        v_tdate := i.dt;
+        v_fdate := trunc(v_tdate,'YEAR');
+        if v_tdate = last_day(v_tdate) then
+            ITSHBHO.MAKE_TL064A_DTLS (to_char(v_fdate, 'DD/MM/YYYY'), to_char(v_tdate, 'DD/MM/YYYY'));
+        end if; 
+        commit;  
+    end loop;                   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_123
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         CBGW11.CBGW_IMPORTDB (to_char(i.dt, 'DD/MM/YYYY'), null); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_126
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+       for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+       loop   
+           ITSHBHO.MAKE_TD045 (null, to_char(i.dt, 'DD/MM/YYYY'));   
+           commit;    
+       end loop;                     
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_127
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+       for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+       loop   
+           ITSHBHO.THDCV19_INPUT_DATA (to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));
+           ITSHBHO.THDCV19_NEW_INPUT_DATA (to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));              
+           commit;    
+       end loop;                     
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_128
+   as
+ vBus_date   date;   
+   begin   
+       Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+       for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+       loop   
+           ITSHBHO.THDCV20_INPUT_DATA (to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));   
+           commit;    
+       end loop;                     
+   end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_129
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+       vRptDate := vRptDate - 1;
+       vOnDate := trunc(vRptDate,'MONTH');
+       ITSHBHO.MAKE_TH088A (to_char(vOnDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'),'A','______'); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_130
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+       vRptDate := vRptDate - 1;
+       vOnDate := trunc(vRptDate,'MONTH');
+       ITSHBHO.MAKE_TH088C (to_char(vOnDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'),'A','______'); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_131
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+       vRptDate := vRptDate - 1;
+       vOnDate := trunc(vRptDate,'MONTH');
+       ITSHBHO.MAKE_TH088B (to_char(vOnDate,'DD/MM/YYYY'),to_char(vRptDate, 'DD/MM/YYYY'),'A','______'); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_132
+   as
+ vBus_date   date;
+vNext_date  date;
+pRptDate       varchar2(20);
+pRptDateTo varchar2(20); 
+begin
+    Select MAX(LAST_WRK_DT)-7 into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001';
+    pRptDate := to_char(vBus_date, 'DD/MM/YYYY');    
+    pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY');
+    MAKE_TF042(pRptDate, pRptDateTo);
+    commit;            
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_133
+   as
+ vBus_date   date; 
+    v_last_wrk_date date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+    select LAST_WORK_DATE + 1 into v_last_wrk_date from tb_hist_dates where today_date = vBus_date and nat ='VNM';
+    ITSHBHO.MAKE_CS023 (to_char(v_last_wrk_date, 'DD/MM/YYYY'), to_char(vBus_date, 'DD/MM/YYYY'),'A','______');
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_134
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       pr_th086_input_data (to_char(i.dt,'DD/MM/YYYY'),'POS','A',NULL);
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_136
+   as
+ vBus_date   date;   
+ begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop    
+        pr_TH080_input_data(p_to_date =>to_char(i.dt, 'DD/MM/YYYY'),p_rpt_type => '1',USER_ID => 'NGHIATM',pos_flg => 'A',p_pos_cd => '______');    
+        commit;     
+    end loop;                      
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_137
+   as
+
+  vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT)
+    into vBus_date
+    from intellect.ca850mb
+   where BR_CD = 'BR0001';
+  pr_TH080A_input_data(p_to_date  => to_char(vBus_date, 'DD/MM/YYYY'),
+                       p_rpt_type => '1',
+                       USER_ID    => Null,
+                       pos_flg    => 'A',
+                       p_pos_cd   => '______'); 
+                       commit;
+       end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_140
+   as
+ vBus_date   date;  
+begin   
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+   for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+   loop   
+       MAKE_TD039(to_char(i.dt,'dd/mm/yyyy'),'A','______');  
+       commit;  
+   end loop;                     
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_141
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   pCOUNT       NUMBER DEFAULT (0);
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   SELECT BSNS_DT
+     INTO vNext_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   pRptDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+   pRptDateTo := TO_CHAR (vNext_date - 1, 'DD/MM/YYYY');
+   THDCV30_INPUT_DATA (pRptDate, pRptDateTo, 'A','110000');
+   COMMIT;
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_142
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   pCOUNT       NUMBER DEFAULT (0);
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   SELECT BSNS_DT
+     INTO vNext_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   pRptDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+   pRptDateTo := TO_CHAR (vNext_date - 1, 'DD/MM/YYYY');
+   MAKE_RT001A_TLTH (pRptDate, pRptDateTo);
+   COMMIT;
+END;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_145
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   
+BEGIN
+   SELECT MAX (LAST_WRK_DT) INTO vBus_date FROM intellect.ca850mb WHERE BR_CD = 'BR0001';
+   SELECT BSNS_DT INTO vNext_date FROM intellect.ca850mb WHERE BR_CD = 'BR0001';
+
+   pRptDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+   pRptDateTo := TO_CHAR (vNext_date - 1, 'DD/MM/YYYY');
+   itshbho.MAKE_CSL005DN_HIST (pRptDate, pRptDateTo);
+   COMMIT;
+END;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_146
+   as
+begin   
+   itshbho.GET_SMS_COLL;               
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_147
+   as
+ 
+vBus_date   varchar2(10);
+vfisrt_date   varchar2(10);
+begin
+ Select to_char(MAX(LAST_WRK_DT),'dd/mm/yyyy'),to_char(trunc(MAX(LAST_WRK_DT),'YEAR'),'dd/mm/yyyy') into vBus_date,vfisrt_date
+ from intellect.ca850mb where BR_CD='BR0001'      ;
+  pr_ln046_input_data(p_from_date => vfisrt_date,p_to_date => vBus_date,p_ac => null,p_cif => null,p_key => 'HQTD-KHCN',pos_flg => 'A',p_pos_cd => '______');
+  pr_th078_input_data(p_from_date => vfisrt_date,p_to_date => vBus_date,p_rpt_type => null,USER_ID => 'TRUONGBD',pos_flg => NULL,p_pos_cd => NULL);
+  commit;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_148
+   as
+
+  vBus_date date;
+  vDays     integer;
+  vOnDate   date;
+  vRptDate  date;
+  vBDate    date;
+  v_count number;
+begin
+  Select MAX(LAST_WRK_DT)
+    into vBus_date
+    from intellect.ca850mb
+   where BR_CD = 'BR0001';
+  select count(*) into v_count from itshbho.tbl_eod_bk_status e where upper(e.proc_name)='[MAKE_CSL005_HIST]' and eod_date=vBus_date-1 and e.status='THANH CONG';
+  if (to_char(vBus_date,'DD')='05') or ((to_char(vBus_date,'DD')='06') and v_count=0) then 
+    vOnDate  := trunc(add_months(vBus_date, -1), 'MONTH');vRptDate := last_day(vOnDate);
+    for c in (select to_char(t.today_date, 'dd/mm/yyyy') ngay
+                from itshbho.tb_hist_dates t
+               where t.nat = 'VNM'
+                 and t.today_date between vOnDate and vRptDate
+               order by today_date) loop
+      itshbho.make_csl005_hist_1(c.ngay, c.ngay);
+    commit;end loop;end if;itshbho.make_csl005_hist_1(to_char(vBus_date, 'dd/mm/yyyy'),to_char(vBus_date, 'dd/mm/yyyy'));commit;end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_150
+   as
+ vBus_date date; 
+BEGIN        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.TF041_MAKER(to_char(i.dt, 'DD/MM/YYYY')); 
+        COMMIT; 
+    end loop;
+END;  
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_151
+   as
+ 
+vBus_date   date;
+vFrom_date date;
+begin
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';  
+     
+     if (extract (day from vBus_date)=1) then
+        select trunc(vBus_date-1,'YEAR') into vFrom_date from dual;
+        ITSHBHO.MAKE_LN042_DTLS ( to_char(vFrom_date,'DD/MM/YYYY'), to_char(vBus_date-1,'DD/MM/YYYY'), '', '', '', 'ALL', 'A', '______' );     
+     end if;
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_1511
+   as
+ 
+    vBus_date   date;
+    v_tdate date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    if (extract (day from vBus_date)=3) then
+        v_tdate := trunc(vBus_date,'MONTH') - 1;
+        ITSHBHO.MAKE_LN042(to_char(v_tdate,'DD/MM/YYYY'),'A','______');     
+    end if;
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_152
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.SYNC_DATA_CSL (to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_153
+   as
+  vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';     
+        
+     vOnDate := vBus_date;
+     vRptDate := trunc(vOnDate,'MONTH');
+     select count(*) into vDays
+     from itshbho.tb_hist_dates
+     where today_date between vRptDate and vOnDate
+         and nat = 'VNM'
+     ;
+     if vDays = 2 then
+        ITSHBHO.MAKE_CU056A_HIST (to_char(vRptDate-1, 'DD/MM/YYYY'));
+        commit;  
+     end if;
+     commit;                 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_154
+   as
+ vBus_date   date;  
+    vBSNS_DT   date; 
+begin 
+    Select MAX(LAST_WRK_DT), max(BSNS_DT) into vBus_date, vBSNS_DT from intellect.ca850mb where BR_CD='BR0001';
+    THDCV17A_DATA_INPUT(to_char(vBus_date,'dd/mm/yyyy'), to_char(vBSNS_DT,'dd/mm/yyyy'));
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_155
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+      for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+      loop  
+          ITSHBHO.THDCV_THE(to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));  
+          commit;   
+      end loop;                    
+  end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_156
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        if i.dt = last_day(i.dt) then
+            ITSHBHO.MAKE_KT055(null, to_char(i.dt, 'DD/MM/YYYY'));  
+            commit;
+        end if;   
+    end loop; 
+    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 2 then
+       ITSHBHO.MAKE_KT055(null, to_char(vRptDate-1, 'DD/MM/YYYY')); 
+       commit;  
+    end if;
+end;                 
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_157
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+            ITSHBHO.MAKE_TH057(to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));  
+            commit;  
+    end loop;     
+end;                 
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_1580
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 4 then
+       ITSHBHO.MAKE_CU067_HIST(to_char(vRptDate-1, 'DD/MM/YYYY')); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1581
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 4 then
+        ITSHBHO.MAKE_DATA_JOB(to_char(vRptDate-1, 'DD/MM/YYYY'));
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_160
+   as
+ vBus_date   date;   
+ begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop    
+        make_th080g(to_char(i.dt,'dd/mm/yyyy'),'A','______');   
+        commit;   
+    end loop;                      
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1601
+   as
+ vBus_date   date;   
+ begin    
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';         
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)    
+    loop    
+        make_th080g1(to_char(i.dt,'dd/mm/yyyy'),'A','______');   
+        commit;   
+    end loop;                      
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_161
+   as
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.MAKE_TR001_HIST(to_char(i.dt, 'DD/MM/YYYY'));  
+        commit;   
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_162
+   as
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.MAKE_LN016XLRR(to_char(i.dt, 'DD/MM/YYYY'));  
+        commit;   
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_163
+   as
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.MAKE_LN016MBN(to_char(i.dt, 'DD/MM/YYYY'));  
+        commit;   
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_164
+   as
+
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.MAKE_TH040_HIST(to_char(i.dt, 'DD/MM/YYYY'),'VND');  
+        ITSHBHO.MAKE_TH040_HIST(to_char(i.dt, 'DD/MM/YYYY'),'USD');
+        ITSHBHO.MAKE_TH040NEW_HIST(to_char(i.dt, 'DD/MM/YYYY'),'VND');  
+        ITSHBHO.MAKE_TH040NEW_HIST(to_char(i.dt, 'DD/MM/YYYY'),'USD');
+        commit;   
+    end loop;
+end; 
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_165
+   as
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.MAKE_TH056_CIF_HIST(to_char(i.dt, 'DD/MM/YYYY'));  
+        commit;   
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_167
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays between 1 and 5 then
+        ITSHBHO.KPI002_LN016_MAKE_DATA(null, to_char(vRptDate-1, 'DD/MM/YYYY'));
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1671
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    v_tdate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    v_tdate := vRptDate-1;
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays between 1 and 7 then
+        ITSHBHO.KPI002_MAKE(to_char(v_tdate, 'DD/MM/YYYY'), 'A','______');
+        CRM_INT.RUN_RPT_KPI002(to_char(v_tdate, 'DD/MM/YYYY'));
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_1672
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    v_fdate date;
+    v_tdate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    
+    if vDays between 1 and 5 then
+        v_tdate := vRptDate-1;
+        v_fdate := trunc(v_tdate,'MONTH');
+        ITSHBHO.OL004_MAKE(to_char(v_fdate, 'DD/MM/YYYY'), to_char(v_tdate, 'DD/MM/YYYY'), 'A', '______');
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_168
+   as
+ vBus_date date; 
+begin  
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';       
+    for i in (select sbdate dt from ITSHBHO.SBCLDR where sbdate between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)  
+    loop  
+        ITSHBHO.CU072_CARD_LOCKED_MAKE(to_char(i.dt, 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'));  
+        commit;   
+    end loop;
+end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_169
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    v_FDate date;
+    v_TDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    v_TDate := trunc(vOnDate,'MONTH') - 1;
+    v_FDate := trunc(v_TDate, 'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between v_TDate + 1 and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 5 then
+        ITSHBHO.OL002_MAKE(to_char(v_FDate, 'DD/MM/YYYY'), to_char(v_TDate, 'DD/MM/YYYY'),'A','______');
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_170
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM';
+    if vDays = 3 then
+       ITSHBHO.MAKE_TL081_HIST (to_char(vRptDate-1, 'DD/MM/YYYY'),NULL,NULL); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_171
+   as
+ vBus_date date; 
+    vNxt_Date date;
+    ao sys_refcursor;
+begin 
+    Select MAX(LAST_WRK_DT), max(bsns_dt)-1 into vBus_date, vNxt_Date
+    from intellect.ca850mb where BR_CD='BR0001';
+    LN024(to_char(vBus_date,'dd/mm/yyyy'), to_char(vNxt_Date,'dd/mm/yyyy'), null, null, null, null, 'ALL', 'A', '______', ao);
+    delete LN024_DTLS where HCP_TRAN_DT between vBus_date and vNxt_Date;
+    insert into LN024_DTLS(FROMDATE, TODATE, MPI_CITY_CD, POS_DESC, REF_NO, MPI_CUST_ID, MPI_CON_ID, MPI_PROJ_ID, CUSTNAME, CUST_TYPE, MPI_LEGACY_ID, CCY, MPI_PROD_CD, PP_PROD_DESC, MPI_SPRD_CD, PSP_SPEC_DESC
+        , HCP_TRAN_DT, HCP_EFF_DT, KYHAN, HPP_PMT_AMT, PRIN_AMT, INT_AMT, HPP_PRIN_PREPAID, HPP_INT_PREPAID, INT_OVD_LATE_CHR, LATE_CHARGES, NON_ACC_CHG, HPP_RPA_AFTER, PMT_MOD, AC_NO, LENDINGSTAFF
+        , BM_MKR_ID, BM_AUTH_ID, TTNO_HIENTAI, TTNO_TRUOC, TTNO_SAU, HCP_REF_TEXT, MAIN_POS, NORM_SPECIAL, ECO_ACTIVE, CO_SPECIAL, PURPOSE, MAIN_SELL, CROSS_SELL, MAN_FLG, RPT_NAME, OPTIONAL_FIELD, OPT) 
+    select FROMDATE, TODATE, MPI_CITY_CD, POS_DESC, REF_NO, MPI_CUST_ID, MPI_CON_ID, MPI_PROJ_ID, CUSTNAME, CUST_TYPE, MPI_LEGACY_ID, CCY, MPI_PROD_CD, PP_PROD_DESC, MPI_SPRD_CD, PSP_SPEC_DESC
+        , HCP_TRAN_DT, HCP_EFF_DT, KYHAN, HPP_PMT_AMT, PRIN_AMT, INT_AMT, HPP_PRIN_PREPAID, HPP_INT_PREPAID, INT_OVD_LATE_CHR, LATE_CHARGES, NON_ACC_CHG, HPP_RPA_AFTER, PMT_MOD, AC_NO, LENDINGSTAFF
+        , BM_MKR_ID, BM_AUTH_ID, TTNO_HIENTAI, TTNO_TRUOC, TTNO_SAU, HCP_REF_TEXT, MAIN_POS, NORM_SPECIAL, ECO_ACTIVE, CO_SPECIAL, PURPOSE, MAIN_SELL, CROSS_SELL, MAN_FLG, RPT_NAME, OPTIONAL_FIELD, OPT
+    from LN024_TMP
+    ;
+    commit;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_2001
+   as
+ vBus_date   date;     
+ begin     
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)     
+     loop     
+         ITSHBHO.MAKE_CLS_HIST (to_char(i.dt, 'DD/MM/YYYY'));     
+     COMMIT; 
+     end loop;                       
+ end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_2002
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       IMP_SRB_CO_CARD(to_char(i.dt,'dd/mm/yyyy'),'~'); 
+       commit;    
+    end loop;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_777
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   pCOUNT       NUMBER DEFAULT (0);
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   SELECT BSNS_DT
+     INTO vNext_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   pRptDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+   pRptDateTo := TO_CHAR (vNext_date - 1, 'DD/MM/YYYY');
+   ITSHBHO.THDCV03A_INPUT_ALL(pRptDate, pRptDateTo, 'A','110000');
+   COMMIT;
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_778
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   pCOUNT       NUMBER DEFAULT (0);
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   SELECT BSNS_DT
+     INTO vNext_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+
+   pRptDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+   pRptDateTo := TO_CHAR (vNext_date - 1, 'DD/MM/YYYY');
+   ITSHBHO.THDCV03CC_INPUTDATA(pRptDate, pRptDateTo, 'A','110000');
+   COMMIT;
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_779
+   as
+
+   vBus_date    DATE;
+   vNext_date   DATE;
+   pRptDate     VARCHAR2 (20);
+   pRptDateTo   VARCHAR2 (20);
+   pCOUNT       NUMBER DEFAULT (0);
+BEGIN
+   SELECT MAX (LAST_WRK_DT)
+     INTO vBus_date
+     FROM intellect.ca850mb
+    WHERE BR_CD = 'BR0001';
+    If vBus_date=LAST_DAY(vBus_date) THEN
+       ITSHBHO.MAKE_TH105(TO_CHAR (vBus_date, 'dd/mm/yyyy'), 'A','110000');
+    end if;
+   COMMIT;
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_800
+   as
+
+    vBus_date   DATE;
+    vOnDate     VARCHAR2 (25 BYTE);
+BEGIN
+    SELECT MAX (LAST_WRK_DT)
+      INTO vBus_date
+      FROM intellect.ca850mb
+     WHERE BR_CD = 'BR0001';
+
+    vOnDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+    itshbho.MAKE_LAIQH_HIST(vOnDate,'Y');
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_801
+   as
+begin 
+LN067_EOD;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_802
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         ITSHBHO.BACKUP_STOCK_GUAR(to_char(i.dt, 'DD/MM/YYYY')); 
+         commit;  
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_803
+   as
+
+  vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT)
+    into vBus_date
+    from intellect.ca850mb
+   where BR_CD = 'BR0001';
+  KT002_MAKE_NHOMNO(to_char(vBus_date, 'dd/mm/yyyy'));
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_880
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    v_tdate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    v_tdate := vRptDate-1;
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays between 2 and 6 then
+        ITSHBHO.KPI002_CRM_MAKE(to_char(v_tdate, 'DD/MM/YYYY'), 'A','______');
+        log_proc_exec('ITSHBHO.KPI002_CRM_MAKE_BU', 'SYSTEM.ITSHBHO', 'input@vOnDate=' || vOnDate, '11. END', 'OK');
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_881
+   as
+ vBus_date date; 
+    vOnDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+        ITSHBHO.KPI002_CRM_MAKE(to_char(vOnDate, 'DD/MM/YYYY'), 'A','______');
+        log_proc_exec('ITSHBHO.KPI002_CRM_MAKE_DAY', 'SYSTEM.ITSHBHO', 'input@vOnDate=' || vOnDate, '11. END', 'OK');
+       commit;  
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_882
+   as
+ vBus_date date; 
+    vOnDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+        ITSHBHO.KPI002_CRM_LN016_MAKE_DATA(null, to_char(vOnDate, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.KPI002_CRM_LN016_MAKE_DATA_DAY KPI002A', 'SYSTEM.ITSHBHO', 'input@vOnDate=' || vOnDate, '1 END', 'OK');
+       commit;  
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_883
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays between 2 and 5 then
+        ITSHBHO.KPI002_CRM_LN016_MAKE_DATA(null, to_char(vRptDate-1, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.KPI002_CRM_LN016_MAKE_DATA_BU KPI002A', 'SYSTEM.ITSHBHO', 'input@vRptDate=' || to_char(vRptDate-1, 'DD/MM/YYYY'), '1 END', 'OK');
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_885
+   as
+ vBus_date date; 
+ BEGIN
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';    
+	for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+	loop 
+		ITSHBHO.KPI_MAKE_DATA_KPIS_CRM_NET(to_char(i.dt, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CROSS_SELL_KPI_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || to_char(i.dt, 'DD/MM/YYYY'), '1.0. KPI_MAKE_DATA_KPIS_NET_CRM', 'OK');
+        ITSHBHO.KPI_MAKE_DATA_CRM_STAFF_COLL(to_char(i.dt, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CROSS_SELL_KPI_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || to_char(i.dt, 'DD/MM/YYYY'), '2.0. KPI_MAKE_DATA_STAFF_COLL_CRM', 'OK');
+		commit;  
+	end loop;
+ END;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_886
+   as
+ vBus_date date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+       CSL_STAFF_CRM_COLL_DN(to_char(vBus_date,'DD/MM/YYYY'),null); 
+       log_proc_exec('ITSHBHO.CSL_STAFF_CRM_COLL_DN', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '1.DN CSL_STAFF_CRM_COLL_DN', 'OK');
+       COMMIT;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_888
+   as
+ vBus_date date; 
+BEGIN        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '1. BEGIN', 'OK');
+    ITSHBHO.csl_emp_map_pro_CRM();
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '2. CSL_EMP_MAP_PRO', 'OK');
+    
+    Select BSNS_DT-1 INTO vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    
+    BEGIN
+        ITSHBHO.CSL_STAFF_COLL_CARD_DETAILS_CRM(to_char(vBus_date, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CSL_STAFF_CRM_COLL_CARD_DETAILS', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '3.0 CSL_STAFF_CRM_COLL_CARD_DETAILS', 'OK');
+    EXCEPTION WHEN OTHERS THEN
+        log_proc_exec('ITSHBHO.CSL_STAFF_CRM_COLL_CARD_DETAILS', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '3.0 CSL_STAFF_CRM_COLL_CARD_DETAILS', 'NOT OK');
+    END;
+    
+    ITSHBHO.CSL_STAFF_CRM_COLL(to_char(vBus_date, 'DD/MM/YYYY'),null); 
+    COMMIT;  
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '4. CSL_STAFF_CRM_COLL', 'OK');
+      
+    ITSHBHO.CSL_STAFF_CRM_COLL_GROUP(to_char(vBus_date, 'DD/MM/YYYY')); 
+    COMMIT;  
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '5. CSL_STAFF_CRM_COLL_GROUP', 'OK');
+    
+    ITSHBHO.CSL_STAFF_CRM_COLL_GROUP_EXP(to_char(vBus_date, 'DD/MM/YYYY'));  /* 18 Mar 2019 PHUONGDT5 add stored procedure to calculate KPI */
+    COMMIT;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '6. CSL_STAFF_CRM_COLL_GROUP_EXP', 'OK');
+     
+    ITSHBHO.CSL_STAFF_CRM_COLL_GROUP_EXP1(to_char(vBus_date, 'DD/MM/YYYY'));  /* 26 Mar 2019 PHUONGDT5 add stored procedure to calculate KPI */
+    COMMIT;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '7. CSL_STAFF_CRM_COLL_GROUP_EXP1', 'OK');
+    
+    delete from itshbho.dm_nhanvien_phongban;
+    insert into itshbho.dm_nhanvien_phongban (MANHANVIEN, HO, HOTEN,MACHUCVU, TENCHUCVU, MAPHONGBAN,TENPHONGBAN, MACHUCDANH, TENCHUCDANH)
+    select distinct a.MANHANVIEN, a.HO, a.HOTEN,a.MACHUCVU, a.TENCHUCVU, a.MAPHONGBAN,a.TENPHONGBAN, a.MACHUCDANH, a.TENCHUCDANH
+    from ghr.nhanvien_phongban a,
+    (select MANHANVIEN,max(eod_date) eod_date from ghr.nhanvien_phongban group by MANHANVIEN) b
+    where a.MANHANVIEN=b.MANHANVIEN and a.eod_date=b.eod_date;      
+    commit;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL_CRM', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '9. END', 'OK');
+END;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_889
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+       ITSHBHO.MAKE_TH053 (null,to_char(vRptDate-1, 'DD/MM/YYYY')); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_890
+   as
+ vBus_date   date; 
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';      
+     for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+     loop 
+         if i.dt = last_day (i.dt) then
+            ITSHBHO.MAKE_TH053A (null,to_char(i.dt, 'DD/MM/YYYY')); 
+            commit;  
+         end if;
+     end loop;                   
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_891
+   as
+ vBus_date   date;   
+begin   
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop 
+        if i.dt = last_day (i.dt) then              
+            ITSHBHO.MAKE_TH053E (to_char(trunc(i.dt,'MONTH'), 'DD/MM/YYYY'), to_char(i.dt, 'DD/MM/YYYY'),'A','110000');   
+            commit; 
+        end if;   
+    end loop;                     
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_892
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    ao sys_refcursor;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 3 then
+        THDCV25(to_char(vRptDate-1, 'DD/MM/YYYY'), to_char(vRptDate-1, 'DD/MM/YYYY'), null, null, null, 'A', '______', ao);        
+        delete THDCV25_RPT where eod_date = vRptDate-1;
+        insert into THDCV25_RPT (EOD_DATE, TUNGAY, DENNGAY, POS_CD, MAIN_POS, CIF, TEN_KH, LOAI_KH, ORG_SUB_TYPE, STK, LOAITIEN, PHANHE, LN_TD, LN_CS, LN_LD, LN_TD_DC, LN_LD_DC, LN_BS, LN_TOTAL, LN_TOTAL_QD)
+        select DENNGAY EOD_DATE, TUNGAY, DENNGAY, POS_CD, MAIN_POS, CIF, TEN_KH, LOAI_KH, ORG_SUB_TYPE, STK, LOAITIEN, PHANHE, LN_TD, LN_CS, LN_LD, LN_TD_DC, LN_LD_DC, LN_BS, LN_TOTAL, LN_TOTAL_QD 
+        from THDCV25_TMP
+        ;
+        commit; 
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_893
+   as
+
+    vBus_date   DATE;
+    vOnDate     VARCHAR2 (25 BYTE);
+BEGIN
+    SELECT MAX (LAST_WRK_DT)
+      INTO vBus_date
+      FROM intellect.ca850mb
+     WHERE BR_CD = 'BR0001';
+
+    vOnDate := TO_CHAR (vBus_date, 'dd/mm/yyyy');
+    ITSHBHO.EINVOICE_SYNC (vOnDate, vOnDate);
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_90000
+   as
+ vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+  CRM_INT.SP_RUN_NONE (vBus_date);
+  commit;   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_90001
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    /* 09 Jun 2022: Chi chay ngay 01 do chay du lieu luy ke hon 10h dong ho*/      
+    if (extract (day from vBus_date)=1) then    
+       CRM_INT.RUN_RPT_LN042 (to_char(vBus_date,'DD/MM/YYYY'));
+       commit;   
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_990
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from itshbho.CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)   
+    loop   
+       ITSHBHO.th082_maker_pro (to_char(i.dt,'DD/MM/YYYY'));
+       commit;    
+    end loop;
+end;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_991
+   as
+ vBus_date date; 
+BEGIN        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '1. BEGIN', 'OK');
+    ITSHBHO.csl_emp_map_pro();
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '2. CSL_EMP_MAP_PRO', 'OK');
+    
+    Select BSNS_DT-1 INTO vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    
+    BEGIN
+        ITREPORT.CSL_STAFF_COLL_CARD_DETAILS@RSV(to_char(vBus_date, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CSL_STAFF_COLL_CARD_DETAILS', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '3.0 CSL_STAFF_COLL_CARD_DETAILS', 'OK');
+    EXCEPTION WHEN OTHERS THEN
+        log_proc_exec('ITSHBHO.CSL_STAFF_COLL_CARD_DETAILS', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '3.0 CSL_STAFF_COLL_CARD_DETAILS', 'NOT OK');
+    END;
+    
+    ITSHBHO.CSL_STAFF_COLL(to_char(vBus_date, 'DD/MM/YYYY'),null); 
+    COMMIT;  
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '4. CSL_STAFF_COLL', 'OK');
+      
+    ITSHBHO.CSL_STAFF_COLL_GROUP(to_char(vBus_date, 'DD/MM/YYYY')); 
+    COMMIT;  
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '5. CSL_STAFF_COLL_GROUP', 'OK');
+    
+    ITSHBHO.CSL_STAFF_COLL_GROUP_EXP(to_char(vBus_date, 'DD/MM/YYYY'));  /* 18 Mar 2019 PHUONGDT5 add stored procedure to calculate KPI */
+    COMMIT;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '6. CSL_STAFF_COLL_GROUP_EXP', 'OK');
+     
+    ITSHBHO.CSL_STAFF_COLL_GROUP_EXP1(to_char(vBus_date, 'DD/MM/YYYY'));  /* 26 Mar 2019 PHUONGDT5 add stored procedure to calculate KPI */
+    COMMIT;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '7. CSL_STAFF_COLL_GROUP_EXP1', 'OK');
+    
+    delete from itshbho.dm_nhanvien_phongban;
+    insert into itshbho.dm_nhanvien_phongban (MANHANVIEN, HO, HOTEN,MACHUCVU, TENCHUCVU, MAPHONGBAN,TENPHONGBAN, MACHUCDANH, TENCHUCDANH)
+    select distinct a.MANHANVIEN, a.HO, a.HOTEN,a.MACHUCVU, a.TENCHUCVU, a.MAPHONGBAN,a.TENPHONGBAN, a.MACHUCDANH, a.TENCHUCDANH
+    from ghr.nhanvien_phongban a,
+    (select MANHANVIEN,max(eod_date) eod_date from ghr.nhanvien_phongban group by MANHANVIEN) b
+    where a.MANHANVIEN=b.MANHANVIEN and a.eod_date=b.eod_date;      
+    commit;
+    log_proc_exec('ITSHBHO.CROSS_SELL_COLL', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || vBus_date, '9. END', 'OK');
+END;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_9920
+   as
+ vBus_date   date; 
+ vNext_date  date; 
+ pRptDate       varchar2(20); 
+ pRptDateTo varchar2(20);  
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001' and bsns_dt>='26-oct-2015'; 
+     Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001' and bsns_dt>='26-oct-2015'; 
+     pRptDate := to_char(vBus_date, 'DD/MM/YYYY');     
+     pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY'); 
+     THDCV05B_FINPOST(pRptDate, pRptDateTo, 'A','______'); 
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9921
+   as
+ vBus_date date; 
+ BEGIN
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';    
+	for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+	loop 
+		ITSHBHO.KPI_MAKE_DATA_KPIS_NET(to_char(i.dt, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CROSS_SELL_KPI', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || to_char(i.dt, 'DD/MM/YYYY'), '1.0. KPI_MAKE_DATA_KPIS_NET', 'OK');
+        ITSHBHO.KPI_MAKE_DATA_STAFF_COLL(to_char(i.dt, 'DD/MM/YYYY'));
+        log_proc_exec('ITSHBHO.CROSS_SELL_KPI', 'SYSTEM.ITSHBHO', 'input@vBus_date=' || to_char(i.dt, 'DD/MM/YYYY'), '2.0. KPI_MAKE_DATA_STAFF_COLL', 'OK');
+		commit;  
+	end loop;
+ END;  
+$$
+
+CREATE OR REPLACE Procedure eod_step_9922
+   as
+ vBus_date date; 
+ BEGIN
+    Select BSNS_DT-1 INTO vBus_date from intellect.ca850mb where BR_CD='BR0001';
+	
+	ITSHBHO.CRM_POS_MEASURE(to_char(vBus_date, 'DD/MM/YYYY')); 
+	COMMIT;  
+	ITSHBHO.CRM_POS_MEASURE_GROUP(to_char(vBus_date, 'DD/MM/YYYY')); 
+	COMMIT;
+ END; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_993
+   as
+ vBus_date   date; 
+ vNext_date  date; 
+ pRptDate       varchar2(20); 
+ pRptDateTo varchar2(20);  
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+     Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001'; 
+     pRptDate := to_char(vBus_date, 'DD/MM/YYYY');     
+     pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY'); 
+     ITSHBHO.THDCV_VHM19(pRptDate, pRptDateTo, 'A',NULL); 
+     commit;             
+     end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_994
+   as
+ vBus_date   date; 
+ vNext_date  date; 
+ pRptDate       varchar2(20); 
+ pRptDateTo varchar2(20);  
+ begin 
+     Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001'; 
+     Select BSNS_DT into vNext_date from intellect.ca850mb where BR_CD='BR0001'; 
+     pRptDate := to_char(vBus_date, 'DD/MM/YYYY');     
+     pRptDateTo := to_char(vNext_date - 1, 'DD/MM/YYYY'); 
+     THDCV_VUD20(pRptDate, pRptDateTo, 'A',NULL); 
+     commit;             
+ end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_996
+   as
+ vBus_date   date;       
+       begin       
+           Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';            
+           for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)       
+           loop       
+               ITSHBHO.MAKE_TR045B (to_char(i.dt, 'DD/MM/YYYY'));       
+ COMMIT; 
+            end loop;                         
+       end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_997
+   as
+ vBus_date   date;     
+     begin     
+         Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+         for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)     
+         loop     
+             ITSHBHO.MAKE_TR044B (to_char(i.dt, 'DD/MM/YYYY'),'Y');     
+       COMMIT; 
+         end loop;                       
+     end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_998
+   as
+ vBus_date   date;    
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)        
+    loop
+        ITSHBHO.MAKE_TH067 (to_char(i.dt, 'DD/MM/YYYY'),null);            
+        commit;       
+    end loop;    
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9982
+   as
+ vBus_date   date;     
+     begin     
+         Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+         for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)     
+         loop     
+             ITSHBHO.MAKE_EB100_TBL (to_char(i.dt, 'DD/MM/YYYY'));     
+         COMMIT; 
+         end loop;                       
+     end;
+   
+$$
+
+CREATE OR REPLACE Procedure eod_step_9983
+   as
+ vBus_date   date;    
+begin        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';        
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt)        
+    loop
+        ITSHBHO.LN096_MAKER_DATA (to_char(i.dt, 'DD/MM/YYYY'));            
+        commit;       
+    end loop;    
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9984
+   as
+ vBus_date date; 
+BEGIN        
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    for i in (select dt from CLDRview where dt between vBus_date and (Select BSNS_DT-1 from intellect.ca850mb where BR_CD='BR0001') order by dt) 
+    loop 
+        ITSHBHO.make_tf041_hist(to_char(i.dt, 'DD/MM/YYYY')); 
+        COMMIT; 
+    end loop;
+END;  
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_9991
+   as
+begin
+  MAKE_CD001;
+  commit;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9992
+   as
+ vBus_date date; 
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+       CSL_STAFF_COLL_DN(to_char(vBus_date,'DD/MM/YYYY'),null); 
+       COMMIT;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9993
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays in ( 4,10 ) then
+       ITSHBHO.CSL_STAFF_COLL_DN(to_char(vRptDate-1, 'DD/MM/YYYY'),null); 
+       COMMIT;
+       /**
+       ITSHBHO.CSL_STAFF_COLL_GROUP_DN(to_char(vRptDate-1, 'DD/MM/YYYY')); 
+       COMMIT;
+       **/
+    end if;
+end;
+
+$$
+
+CREATE OR REPLACE Procedure eod_step_9994
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+   Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ; 
+    if vDays = 1 then
+        ITSHBHO.MAKE_OL006(); 
+    commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_9996
+   as
+ vBus_date   date;  
+  begin  
+      Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+         ITSHBHO.AML_ACC_EXP (to_char(vBus_date,'DD/MM/YYYY'));  
+         commit;  
+         ITSHBHO.AML_CA080HB_CIF (to_char(vBus_date,'DD/MM/YYYY'));  
+         commit;         
+         ITSHBHO.AML_TRANS_EXP (to_char(vBus_date,'DD/MM/YYYY'));  
+         commit;           
+         ITSHBHO.AML_FULL_EXP (to_char(vBus_date,'DD/MM/YYYY'));  
+         commit;          
+  end; 
+$$
+
+CREATE OR REPLACE Procedure eod_step_9997
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from ITSHBHO.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 6 then
+       ITSHBHO.PHANBO_THE_CASA (null); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99990
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+       CRM_INT.SP_CRM_CARD (to_char(vBus_date,'DD/MM/YYYY'));
+       commit;   
+       CRM_INT.SP_CRM_DEPOSIT_KHCN (to_char(vBus_date,'DD/MM/YYYY'));  
+       commit;        
+       CRM_INT.SP_CRM_DEPOSIT_KHDN (to_char(vBus_date,'DD/MM/YYYY'));    
+       commit;   
+       CRM_INT.SP_CRM_EBANK_PRD (to_char(vBus_date,'DD/MM/YYYY'));     
+       commit;
+       CRM_INT.SP_CRM_EBANK_SERVICE (to_char(vBus_date,'DD/MM/YYYY'));     
+       commit;   
+       CRM_INT.SP_CRM_GUARANTEE (to_char(vBus_date,'DD/MM/YYYY'));     
+       commit;     
+       CRM_INT.SP_CRM_LOAN_KHCN (to_char(vBus_date,'DD/MM/YYYY'));   
+       commit;    
+       CRM_INT.SP_CRM_LOAN_KHDN (to_char(vBus_date,'DD/MM/YYYY'));  
+       commit;     
+       CRM_INT.SP_CRM_CUSTOMER_INFO (to_char(vBus_date,'DD/MM/YYYY'));  
+       commit;   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99991
+   as
+ vBus_date   date;
+begin
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+       CRM_INT.SP_CRM_TOI (to_char(vBus_date,'DD/MM/YYYY'));
+       commit;   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99993
+   as
+
+    vBus_date          DATE;
+    vDays              INTEGER;
+    vOnDate            DATE;
+    vRptDate           DATE;
+    vfromdate          DATE;
+    vtodate            DATE;
+    vfromdate_chiphi   DATE;
+    vtodate_chiphi     DATE;
+    ao sys_refcursor;
+BEGIN
+    SELECT MAX (LAST_WRK_DT)
+      INTO vBus_date
+      FROM intellect.ca850mb
+     WHERE BR_CD = 'BR0001';
+     
+    vOnDate := vBus_date;
+    vRptDate := TRUNC (vOnDate, 'MONTH');
+
+    SELECT COUNT (*)
+      INTO vDays
+      FROM itshbho.tb_hist_dates
+     WHERE today_date BETWEEN vRptDate AND vOnDate AND nat = 'VNM';
+     
+    SELECT TO_DATE (LAST_DAY (ADD_MONTHS (TRUNC (SYSDATE, 'MM'), -3)),
+                    'DD/MM/RRRR')
+      INTO vtodate
+      FROM DUAL;
+
+    SELECT TO_DATE (ADD_MONTHS (TRUNC (SYSDATE, 'MM'), -3), 'DD/MM/RRRR')
+      INTO vfromdate
+      FROM DUAL;
+
+    SELECT TO_DATE (LAST_DAY (ADD_MONTHS (TRUNC (SYSDATE, 'MM'), 3)),
+                    'DD/MM/RRRR')
+      INTO vtodate_chiphi
+      FROM DUAL;
+
+    SELECT to_date(   EXTRACT (MONTH FROM SYSDATE)
+            || '/25/'
+            || EXTRACT (YEAR FROM SYSDATE), 'MM/DD/RRRR')
+      INTO vtodate_chiphi
+      FROM DUAL;
+
+    SELECT TO_DATE (ADD_MONTHS (TRUNC (SYSDATE, 'MM'), -3), 'DD/MM/RRRR')
+      INTO vfromdate_chiphi
+      FROM DUAL;
+    IF vDays = 26
+    THEN
+        ITSHBHO.TF061_PHANBO (to_char(vfromdate, 'DD/MM/YYYY'),
+                              to_char(vtodate, 'DD/MM/YYYY'),
+                              vfromdate_chiphi,
+                              vtodate_chiphi
+                              , 'A','______', ao);
+        COMMIT;
+    END IF;
+END;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99994
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    vfromdate date;
+    vtodate date;
+    aoutcursordata  sys_refcursor;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    SELECT to_date(LAST_DAY(ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)),'DD/MM/RRRR') into vtodate FROM dual;
+    SELECT to_date(ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1) ,'DD/MM/RRRR') into vfromdate FROM dual;
+    if vDays = 5 then
+       ITSHBHO.EB115_PHANBO (vfromdate,vtodate,'ACQ','A','______',aoutcursordata);
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99995
+   as
+begin
+    insert into ITSHBHO.KHDN_ONLINE
+    (
+      CIF_NO , 
+      service_make ,
+      EOD_DATE 
+    )
+    select CIF_NO,MAKER,sysdate from EB_DOCKER.CUSTOMER_SERVICE sv where MAKER = 'ibank_sys_maker'
+    and cif_no not in (select cif_no from ITSHBHO.KHDN_ONLINE);
+    commit;
+end ;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99996
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+    vfromdate date;
+    vtodate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from itshbho.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    SELECT to_date(LAST_DAY(ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 0)),'DD/MM/RRRR') into vtodate FROM dual;
+    SELECT to_date(ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 0) ,'DD/MM/RRRR') into vfromdate FROM dual;
+    if vDays = 25 then
+       ITSHBHO.MAKE_TF061_SLDIEN (vfromdate,vtodate);
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99997
+   as
+ vBus_date date; 
+    vDays integer;
+    vOnDate date;
+    vRptDate date;
+begin 
+    Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+    vOnDate := vBus_date;
+    vRptDate := trunc(vOnDate,'MONTH');
+    select count(*) into vDays
+    from ITSHBHO.tb_hist_dates
+    where today_date between vRptDate and vOnDate
+        and nat = 'VNM'
+    ;
+    if vDays = 26 then
+       ITSHBHO.PRC_CREATE_PB_SWIFT_NOSTRO_TRANS(null,null); 
+       commit;  
+    end if;
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99998
+   as
+ vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+  CRM_INT.SP_RUN_BACKUP (vBus_date);
+  commit;   
+end;
+$$
+
+CREATE OR REPLACE Procedure eod_step_99999
+   as
+ vBus_date date;
+begin
+  Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';          
+  CRM_INT.SP_RUN_ALL (vBus_date);
+  commit; 
+   insert into SHB_SMS_PMUD(ID, MOBILE, CONTENT,SERVICE, STATUS, SEND_DATE, SENT)  
+    select SHB_SMS_seq.nextval,MOBILE,trim('BACKUP CRM THANH CONG') CONTENT,'CROSS_SELL_ALERT' SERVICE,'' STATUS,sysdate SEND_DATE,0 SENT     
+    from  (select to_char(listagg( to_char(mobile),',') within group (order by to_char(mobile))) MOBILE              
+              from itshbho.shb_sms_pmud_map a, itshbho.shb_sms_pmud_group b, itshbho.shb_sms_pmud_group_details c   
+              where instr(a.GROUP_ID,b.id)>0 and instr(c.GROUP_ID,b.id)>0 and a.service='CROSS_SELL_ALERT'  
+    );    
+end;
+$$
+
