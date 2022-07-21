@@ -4,34 +4,33 @@ import contextlib
 from numpy import true_divide
 import pandas as pd
 import copy
+from .config import Config
+
 
 class ParsingSQLOwnersAndObjects:
     """ Parses for the owner and object names from stored
         procedure strings"""
     
     
-    def __init__(self, database_file_path, stored_proc_file_path):
-        self.database = pd.read_csv(database_file_path)
-        self.stored_proc = open(stored_proc_file_path, 'r')
-    
+    def __init__(self):
+        self.database_file_path = Config().file_all_objects
+        self.stored_proc_file_path = Config().file_sql_source
+        self.database = pd.read_csv(self.database_file_path)
+        self.stored_proc = open(self.stored_proc_file_path, 'r')
+        self.sql_input = Config().single_sql_stmt
 
-    def close_file(self):
-        if self.stored_proc:
-            self.stored_proc.close()
-            self.stored_proc = None
-        
     def unique(self, ls):
         result = list(dict.fromkeys(ls))
         return result
 
     
     
-    def split_sql_string(self, string):
+    def split_sql_string(self, sql_string):
         # separates large string into individual statements,
         # capitalises and removes all white space characters
-        string = string.upper()
-        string = re.sub("\s+", " ", string)
-        ar_string = string.split(";")
+        sql_string = sql_string.upper()
+        sql_string = re.sub("\s+", " ", sql_string)
+        ar_string = sql_string.split(";")
         
         return ar_string
 
@@ -126,19 +125,47 @@ class ParsingSQLOwnersAndObjects:
                             print (self.query_object_type(owner[0], obj[0], self.database))
 
 
+
+    def single_sql(self, sql_str):
+        owners = self.database["OWNER"].tolist()
+        owners = self.unique(owners)
+        objects = self.database["OBJECT_NAME"].tolist()
+        objects = self.unique(objects)
+
+        res = {}
+        stmt = self.split_sql_string(sql_str) 
+        count = 0
+        for st in stmt:
+            owner_found = self.cross_search_for_name_and_index(owners, st)
+            obj_found = self.cross_search_for_name_and_index(objects, st)
+
+        # searches for an owner name in each statement by cross referencing distinct owners list
+        
             
-        
-        
+            # case dot between owner and object
+            # eg: SCHEMA.Table, CARS.Toyota
+            
+            for owner in owner_found:
+                for obj in obj_found:
+                    if owner[2] == obj[1] - 1:
+                        res[count] = (owner, obj, self.query_object_type(owner[0], obj[0], self.database))
+                        # res.append(owner, obj, self.query_object_type(owner[0], obj[0], self.database))
+                        
+                        count += 1
+                        # print (owner, obj)
+                        # print (self.query_object_type(owner[0], obj[0], self.database))
+
+
+        return res
 
 
             
 if __name__ == '__main__': # for testing on data source
-
-    file_all_objects = 'datascr/all_objects.csv'
-    file_sql_source = 'datascr/test.txt' 
-    a = ParsingSQLOwnersAndObjects(file_all_objects,file_sql_source)
-    a.find_objects_in_sql_stmt()
+    a = ParsingSQLOwnersAndObjects()
+    a.find_objects_in_sql_stmt()ư
+    a.single_sql()
     
+
 
 
     
