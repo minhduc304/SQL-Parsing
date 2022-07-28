@@ -20,6 +20,7 @@ def single_string():
 @app.route('/apiv2', methods=['POST'])
 def sqlflow_():
     req_json = request.json
+    #allows user to request sql parsing with json string 
     sql_string = req_json['sql-string']
     string_input = sqlflow_request(sql_string)
     schema_parsing = req_json['schema-parsing']
