@@ -15,9 +15,11 @@ class ParsingSQLOwnersAndObjects:
     def __init__(self):
         self.database_file_path = Config().file_all_objects
         self.stored_proc_file_path = Config().file_sql_source
+        self.cols_file_path = Config().file_all_tables_and_cols
         self.database = pd.read_csv(self.database_file_path)
         self.stored_proc = open(self.stored_proc_file_path, 'r')
         self.sql_input = Config().single_sql_stmt
+        self.big_database = pd.read_excel(self.cols_file_path, usecols='A:C', engine='openpyxl')
 
     def unique(self, ls):
         result = list(dict.fromkeys(ls))
@@ -121,7 +123,6 @@ class ParsingSQLOwnersAndObjects:
                 for owner in owner_found:
                     for obj in obj_found:
                         if owner[2] == obj[1] - 1:
-                            print (owner, obj)
                             print (self.query_object_type(owner[0], obj[0], self.database))
 
 
@@ -149,14 +150,14 @@ class ParsingSQLOwnersAndObjects:
                 for obj in obj_found:
                     if owner[2] == obj[1] - 1:
                         res[count] = (owner, obj, self.query_object_type(owner[0], obj[0], self.database))
-                        # res.append(owner, obj, self.query_object_type(owner[0], obj[0], self.database))
                         
                         count += 1
-                        # print (owner, obj)
-                        # print (self.query_object_type(owner[0], obj[0], self.database))
-
-
+                    
         return res
+
+
+
+
 
 
             
@@ -164,6 +165,7 @@ if __name__ == '__main__': # for testing on data source
     a = ParsingSQLOwnersAndObjects()
     a.find_objects_in_sql_stmt()
     a.single_sql()
+
     
 
 
