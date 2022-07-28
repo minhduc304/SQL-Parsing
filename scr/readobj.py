@@ -162,7 +162,7 @@ class ParsingSQLOwnersAndObjects:
             
 if __name__ == '__main__': # for testing on data source
     a = ParsingSQLOwnersAndObjects()
-    a.find_objects_in_sql_stmt()ư
+    a.find_objects_in_sql_stmt()
     a.single_sql()
     
 

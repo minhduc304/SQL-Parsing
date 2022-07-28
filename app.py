@@ -20,7 +20,7 @@ def my_form_post():
     #a.find_objects_in_sql_stmt()
     return jsonify(a.single_sql(text))
     #return processed_text
-    
+
 
 
 
