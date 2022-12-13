@@ -3,7 +3,7 @@ class Config:
     def __init__(self):
         self.file_all_objects = 'datascr/all_objects.csv'
         self.file_sql_source = 'datascr/all_procedures.txt' 
-        self.file_all_tables_and_cols = 'datascr/all_tables/all_tables.xlsx'
+        self.file_all_tables_and_cols = 'datascr/all_tab_cols.json'
         self.gg_auth_code = '115302095083483541585'
         self.single_sql_stmt = """CREATE OR REPLACE Procedure eod_step_005
                         as

@@ -1,10 +1,12 @@
+from asyncio import all_tasks
 from codecs import escape_encode
+import json
 import re
 import contextlib
 from numpy import true_divide
 import pandas as pd
 import copy
-from .config import Config
+from config import Config
 
 
 class ParsingSQLOwnersAndObjects:
@@ -19,7 +21,7 @@ class ParsingSQLOwnersAndObjects:
         self.database = pd.read_csv(self.database_file_path)
         self.stored_proc = open(self.stored_proc_file_path, 'r')
         self.sql_input = Config().single_sql_stmt
-        self.big_database = pd.read_excel(self.cols_file_path, usecols='A:C', engine='openpyxl')
+        self.big_database = json.load(open(Config().file_all_tables_and_cols))
 
     def unique(self, ls):
         result = list(dict.fromkeys(ls))
@@ -127,11 +129,16 @@ class ParsingSQLOwnersAndObjects:
 
 
 
+    def get_cols(self, schema, table):
+        return self.big_database[schema][table]
+
+
     def single_sql(self, sql_str):
         owners = self.database["OWNER"].tolist()
         owners = self.unique(owners)
         objects = self.database["OBJECT_NAME"].tolist()
         objects = self.unique(objects)
+        
 
         res = {}
         stmt = self.split_sql_string(sql_str) 
@@ -152,8 +159,30 @@ class ParsingSQLOwnersAndObjects:
                         res[count] = (owner, obj, self.query_object_type(owner[0], obj[0], self.database))
                         
                         count += 1
+        
+        #return res
+        
+        
+        
+        res_arr = []
+
+        for k, v in res.items():
+            if v[2][0] == 'TABLE':
+                cols_found = []
+                try:
+                    cols_check = self.get_cols(v[0], obj[1])
                     
-        return res
+                except: 
+                    cols_check = None
+                if cols_check is not None:
+                    
+                    for col in cols_check:
+                        if col in self.big_database:
+                            cols_found.append(col)
+
+
+        
+
 
 
 
@@ -163,11 +192,28 @@ class ParsingSQLOwnersAndObjects:
             
 if __name__ == '__main__': # for testing on data source
     a = ParsingSQLOwnersAndObjects()
-    a.find_objects_in_sql_stmt()
-    a.single_sql()
+    #a.find_objects_in_sql_stmt()
+
+    text = """"CREATE OR REPLACE Procedure eod_step_005
+                        as
+                    vBus_date   date;
+                        begin
+        Select MAX(LAST_WRK_DT) into vBus_date from intellect.ca850mb where BR_CD='BR0001';
+        Delete SHB_TB_FISALLOC_HIST where  EOD_DATE=vBus_date;
+        INSERT INTO ITSHBHO.SHB_TB_FISALLOC_HIST(ALLOC_SEQ, DEAL_FLOW, DEAL_ID, UNSOURCED_QTY, SECURITY_CODE, EOD_DATE)            
+        SELECT A.ALLOC_SEQ,A.DEAL_FLOW,A.DEAL_ID,A.UNSOURCED_QTY,B.SECURITY_CODE,vBus_date
+        FROM   INTELLECT.TB_FIS_DEAL_ALLOC A
+        INNER  JOIN INTELLECT.VW_FISDEAL B ON A.DEAL_ID = B.DEAL_ID
+        WHERE  TRIM(B.DEAL_STATUS) = N'DEAL_COMPLETED'
+             OR TRIM(B.DEAL_STATUS) = N'BO_AUTHORIZED'
+        ORDER  BY ALLOC_SEQ;    
+        commit;            
+end; """
+    
+    print(a.single_sql(text))
 
     
-
+    
 
 
     
